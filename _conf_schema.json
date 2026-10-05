@@ -1,0 +1,12 @@
+{
+  "bot_name": {"description": "状态卡署名", "type": "string", "default": "xiaohuicat"},
+  "admin_ids": {"description": "额外机器人管理员 ID", "type": "list", "default": [], "hint": "AstrBot 管理员自动拥有权限。QQ 官方机器人请填写平台用户 ID/openid，可通过 /sid 查看，不要填写旧机器人的数字 QQ 号。"},
+  "api_url": {"description": "备用查询 API", "type": "string", "default": "https://api.mcsrvstat.us/2/{address}", "hint": "直连失败时使用，保留 {address} 占位符。响应应为 mcsrvstat.us 格式。"},
+  "request_timeout": {"description": "备用 API 超时（秒）", "type": "float", "default": 10.0},
+  "ping_timeout": {"description": "Minecraft 直连超时（秒）", "type": "float", "default": 4.0},
+  "history_enabled": {"description": "启用后台人数采样", "type": "bool", "default": true, "hint": "关闭时只记录手动查询；已有历史保留。修改后重载插件。"},
+  "sample_interval": {"description": "后台采样间隔（秒）", "type": "int", "default": 300, "hint": "默认 5 分钟，最低 60 秒。绑定的服务器会持续采样，临时查询的服务器会跟踪 24 小时。"},
+  "retention_hours": {"description": "历史保留时长（小时）", "type": "int", "default": 48, "hint": "最低 24 小时，图表固定显示最近 24 小时。"},
+  "monitor_servers": {"description": "额外持续采样服务器", "type": "list", "default": [], "hint": "域名或 IP，可附带端口。这些服务器无需在群内绑定也会持续采样。"},
+  "font_path": {"description": "自定义中文字体文件绝对路径", "type": "string", "default": "", "hint": "留空自动查找 Noto Sans CJK、文泉驿或 Windows 微软雅黑。Linux 建议安装 fonts-noto-cjk，路径须在 AstrBot 运行环境内可读。"}
+}
