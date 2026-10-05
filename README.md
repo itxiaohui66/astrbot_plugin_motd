@@ -7,7 +7,7 @@ Minecraft Java 服务器状态查询插件，适用于 AstrBot 的 QQ 官方机�
 ## 保留的功能
 
 - `/motd`、`/mc`、`/mcstatus` 三个命令入口；群默认服务器查询与临时地址查询。
-- 机器人管理员设置/清除群默认服务器，支持 `set / 设置`、`unset / clear / 清除 / 取消`。设置成功后立即查询。
+- 本群群主、群管理员或机器人管理员均可设置/清除群默认服务器，支持 `set / 设置`、`unset / clear / 清除 / 取消`。设置成功后立即查询。
 - 查询在线/离线、版本、MOTD、在线/上限人数、人数进度条、公开玩家样本、服务器图标。没有图标时显示像素苦力怕。
 - Minecraft 状态握手和 ping/pong 测得的真实 RTT；保留域名 SRV 解析与显式端口。
 - 保留原像素风图片；图片渲染或上传失败时回复文字，包含人数历史摘要。
@@ -69,17 +69,26 @@ Windows 自动使用系统微软雅黑。Linux / Docker 建议在 AstrBot 运行
 | `/motd` | 查询本群默认服务器，并显示波动图 |
 | `/motd mc.example.com` | 临时查询，不改变群默认设置 |
 | `/motd mc.example.com:25565` | 指定端口查询 |
-| `/motd set mc.example.com` | 管理员设置本群服务器并立即查询 |
-| `/motd unset` | 管理员清除本群服务器 |
+| `/motd set mc.example.com` | 群主/群管理员/机器人管理员设置本群服务器并立即查询 |
+| `/motd unset` | 群主/群管理员/机器人管理员清除本群服务器 |
+| `/motd identity` | 查看当前用户在本群的授权标识（不会授予权限） |
 | `/motd history` | 默认服务器的状态与 24 小时波动 |
 | `/motd history mc.example.com` | 指定服务器的状态与波动 |
 | `/motd help` | 帮助 |
 
 私聊可以临时查询地址；默认服务器设置/清除在群聊中使用。当前查询 Minecraft **Java 版**，保持旧项目的查询范围。
 
+### 群管理权限
+
+`set` 和 `unset` 都允许本群群主、本群管理员以及机器人管理员操作，普通群成员可以查询状态和历史。群角色取自平台消息中的 `sender.role` / `author.member_role`；消息没有角色时尝试通过平台群成员接口核实，不能用 AstrBot 全局 `event.is_admin()` 代替群角色。
+
+OneBot 支持读取群消息角色及查询成员信息。QQ 官方（WebSocket / Webhook）支持读取消息原始角色，并复用当前适配器的鉴权请求查询 `/v2/groups/{group_openid}/members/{member_openid}`。实际可用性取决于机器人接口权限；[QQ SDK 的群成员接口说明](https://zhinjs.github.io/qq-official-bot/api/group.html#群成员查询) 介绍了接口权限限制。角色无法核实会明确提示，不会把普通成员当作管理员。
+
+如果 QQ 官方接口无法提供角色，可以由机器人管理员配置**单群授权**：让该群管理人员在对应群发送 `/motd identity`，把返回的 `平台ID|群ID|用户ID` 加入插件 `group_admin_ids`。该授权只允许此人在此群管理 MOTD，不会获得全局机器人权限，也不对其他群生效。群管理人员变更后应移除旧授权。
+
 ## 配置
 
-在 WebUI 插件配置中调整：`bot_name`、`admin_ids`、`api_url`、`request_timeout`、`ping_timeout`、`history_enabled`、`sample_interval`、`retention_hours`、`monitor_servers`、`font_path`。后台采样参数修改后重载插件。
+在 WebUI 插件配置中调整：`bot_name`、`admin_ids`、`group_admin_ids`、`api_url`、`request_timeout`、`ping_timeout`、`history_enabled`、`sample_interval`、`retention_hours`、`monitor_servers`、`font_path`。后台采样参数修改后重载插件。
 
 ## 本地验证与打包
 

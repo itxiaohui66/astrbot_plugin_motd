@@ -10,8 +10,19 @@ import pytest
 
 
 class Event:
-    def __init__(self, platform="qq-main", group="group-openid", admin=False, image_error=False):
+    def __init__(
+        self,
+        platform="qq-main",
+        group="group-openid",
+        admin=False,
+        image_error=False,
+        platform_name="qq_official",
+        raw=None,
+        user="user-openid",
+    ):
         self.platform, self.group, self.admin = platform, group, admin
+        self.platform_name, self.user = platform_name, user
+        self.message_obj = types.SimpleNamespace(raw_message=raw)
         self.image_error = image_error
         self.unified_msg_origin = f"{platform}:private:user"
         self.messages = []
@@ -23,8 +34,11 @@ class Event:
     def get_platform_id(self):
         return self.platform
 
+    def get_platform_name(self):
+        return self.platform_name
+
     def get_sender_id(self):
-        return "user-openid"
+        return self.user
 
     def is_admin(self):
         return self.admin
@@ -145,4 +159,66 @@ async def test_missing_default_invalid_and_private_setting(plugin_class):
     assert "请在群内" in private.messages[-1][1]
     await plugin.motd(event, "help")
     assert "/mcstatus" in event.messages[-1][1]
+    await plugin.terminate()
+
+
+@pytest.mark.parametrize("platform_name", ["qq_official", "qq_official_webhook", "aiocqhttp"])
+@pytest.mark.parametrize("role", ["owner", "admin", "member"])
+async def test_group_roles_can_set_and_clear_only_when_privileged(
+    plugin_class, platform_name, role
+):
+    plugin = plugin_class(object(), {"history_enabled": False})
+
+    async def no_send(*args):
+        pass
+
+    plugin._query_and_send = no_send
+    raw = (
+        {"sender": {"role": role}}
+        if platform_name == "aiocqhttp"
+        else {"author": {"member_role": role}}
+    )
+    event = Event(platform_name=platform_name, raw=raw)
+    await plugin.motd(event, "set", "a.test")
+    scope = plugin._scope(event)
+    if role == "member":
+        assert await plugin.store.get_binding(scope) is None
+        assert "暂时无法核实" not in event.messages[-1][1]
+        await plugin.store.set_binding(scope, "original.test", "bot-admin")
+        await plugin.motd(event, "unset")
+        assert await plugin.store.get_binding(scope) == "original.test"
+    else:
+        assert await plugin.store.get_binding(scope) == "a.test"
+        await plugin.motd(event, "unset")
+        assert await plugin.store.get_binding(scope) is None
+    await plugin.terminate()
+
+
+async def test_group_grant_is_limited_to_one_group_and_adapter(plugin_class):
+    plugin = plugin_class(
+        object(),
+        {"history_enabled": False, "group_admin_ids": ["qq-main|group-openid|user-openid"]},
+    )
+
+    async def no_send(*args):
+        pass
+
+    plugin._query_and_send = no_send
+    event = Event()
+    await plugin.motd(event, "set", "a.test")
+    assert await plugin.store.get_binding(plugin._scope(event)) == "a.test"
+    for outsider in [
+        Event(group="another-group"),
+        Event(platform="another-bot"),
+        Event(user="another-user"),
+    ]:
+        await plugin.motd(outsider, "set", "unauthorized.test")
+        assert "无法核实" in outsider.messages[-1][1]
+        if outsider.group != event.group or outsider.platform != event.platform:
+            assert await plugin.store.get_binding(plugin._scope(outsider)) is None
+        else:
+            assert await plugin.store.get_binding(plugin._scope(outsider)) == "a.test"
+    await plugin.motd(event, "identity")
+    assert "qq-main|group-openid|user-openid" in event.messages[-1][1]
+    assert not plugin._is_admin(event)
     await plugin.terminate()

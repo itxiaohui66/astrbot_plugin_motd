@@ -1,6 +1,7 @@
 {
   "bot_name": {"description": "状态卡署名", "type": "string", "default": "xiaohuicat"},
   "admin_ids": {"description": "额外机器人管理员 ID", "type": "list", "default": [], "hint": "AstrBot 管理员自动拥有权限。QQ 官方机器人请填写平台用户 ID/openid，可通过 /sid 查看，不要填写旧机器人的数字 QQ 号。"},
+  "group_admin_ids": {"description": "本群管理授权（平台无法获取群角色时）", "type": "list", "default": [], "hint": "通常自动识别群主/群管理员，无需填写。QQ 官方接口无法获取角色时，让该群管理人员在对应群发送 /motd identity，把返回的 平台ID|群ID|用户ID 填入此列表，只授权该用户管理该群 MOTD，不授予全局机器人管理权限。群管理人员变更后请及时移除旧授权。"},
   "api_url": {"description": "备用查询 API", "type": "string", "default": "https://api.mcsrvstat.us/2/{address}", "hint": "直连失败时使用，保留 {address} 占位符。响应应为 mcsrvstat.us 格式。"},
   "request_timeout": {"description": "备用 API 超时（秒）", "type": "float", "default": 10.0},
   "ping_timeout": {"description": "Minecraft 直连超时（秒）", "type": "float", "default": 4.0},

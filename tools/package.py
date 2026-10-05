@@ -1,5 +1,6 @@
 """Build an installable archive without local data, test stubs, or development downloads."""
 
+import re
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -7,7 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    target = ROOT / "dist" / "astrbot_plugin_motd-v1.0.0.zip"
+    metadata = (ROOT / "metadata.yaml").read_text(encoding="utf-8")
+    version = re.search(r"^version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)\s*$", metadata, re.MULTILINE).group(
+        1
+    )
+    target = ROOT / "dist" / f"astrbot_plugin_motd-{version}.zip"
     target.parent.mkdir(exist_ok=True)
     files = (
         [

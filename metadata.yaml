@@ -1,7 +1,7 @@
 name: astrbot_plugin_motd
 display_name: Minecraft MOTD 与玩家波动
 desc: Minecraft Java 服务器状态图片、群默认服务器、真实 Ping、玩家名单和最近 24 小时人数波动图。
-version: v1.0.0
+version: v1.0.1
 author: itxiaohui
 support_platforms:
   - qq_official

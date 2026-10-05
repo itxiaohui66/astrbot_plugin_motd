@@ -14,13 +14,15 @@ from .services.address import normalize_address
 from .services.mc_api import MinecraftServerAPI
 from .services.monitor import PlayerMonitor
 from .services.motd_card import render_motd_card
+from .services.permissions import get_group_role
 from .services.storage import MotdStore
 
 HELP = """Minecraft MOTD 查询
 /motd                         查询本群默认服务器
 /motd 服务器地址               临时查询（不改变默认设置）
-/motd set 服务器地址           设置本群服务器（机器人管理员）
-/motd unset                   清除本群设置（机器人管理员）
+/motd set 服务器地址           设置本群服务器（群主/群管理员/机器人管理员）
+/motd unset                   清除本群设置（群主/群管理员/机器人管理员）
+/motd identity                查看本群授权标识（平台无法识别群角色时使用）
 /motd history [服务器地址]     查看最近 24 小时玩家波动
 /motd help                    查看帮助
 别名：/mc、/mcstatus；设置、清除、取消、波动、趋势也可使用。
@@ -70,6 +72,19 @@ class MotdPlugin(Star):
             str(value) for value in self.config.get("admin_ids", [])
         }
 
+    @staticmethod
+    def _group_authorization_key(event):
+        return f"{event.get_platform_id()}|{event.get_group_id()}|{event.get_sender_id()}"
+
+    async def _can_manage_group(self, event):
+        if self._is_admin(event):
+            return True, True
+        # Manual grants are confined to one adapter instance, group and user.
+        if self._group_authorization_key(event) in self.config.get("group_admin_ids", []):
+            return True, True
+        role = await get_group_role(event)
+        return role in {"owner", "admin"}, role is not None
+
     @filter.command("motd", alias={"mc", "mcstatus"})
     async def motd(self, event: AstrMessageEvent, action: str = "", address: str = ""):
         """查询 Minecraft 状态、设置群默认服务器，以及查看 24 小时玩家波动图。"""
@@ -93,18 +108,35 @@ class MotdPlugin(Star):
         if verb in {"help", "帮助"}:
             await event.send(event.plain_result(HELP))
             return
-        if verb in {"set", "设置", "unset", "clear", "清除", "取消"}:
-            if not self._is_admin(event):
+        if verb in {"identity", "身份"}:
+            if not event.get_group_id():
+                await event.send(event.plain_result("⚠️ 请在群内查看授权标识。"))
+            else:
                 await event.send(
-                    event.plain_result("❌ 只有机器人管理员可以设置或清除本群 MOTD 服务器。")
+                    event.plain_result(
+                        "本群授权标识（仅供机器人管理员配置，本命令不会授予权限）：\n"
+                        + self._group_authorization_key(event)
+                    )
                 )
-                return
+            return
+        if verb in {"set", "设置", "unset", "clear", "清除", "取消"}:
             if not event.get_group_id():
                 await event.send(
                     event.plain_result(
                         "⚠️ 请在群内设置或清除默认服务器；私聊可使用 /motd 服务器地址。"
                     )
                 )
+                return
+            allowed, verified = await self._can_manage_group(event)
+            if not allowed:
+                message = "❌ 只有本群群主、群管理员或机器人管理员可以设置或清除 MOTD 服务器。"
+                if not verified:
+                    message += (
+                        "\n⚠️ 平台未提供可用的群角色信息，暂时无法核实身份。"
+                        "请检查群成员查询接口权限，或发送 /motd identity，"
+                        "由机器人管理员在插件配置 group_admin_ids 中按群授权。"
+                    )
+                await event.send(event.plain_result(message))
                 return
             if verb in {"set", "设置"}:
                 if not address:
