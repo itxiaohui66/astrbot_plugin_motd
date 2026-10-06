@@ -76,4 +76,4 @@ def test_card_handles_empty_history_offline_failure_and_zero(online, failed, his
         now=100000,
     )
     image = Image.open(io.BytesIO(raw))
-    assert image.format == "PNG" and image.size == (1200, 1080)
+    assert image.format == "PNG" and image.width == 1200 and image.height > 1500

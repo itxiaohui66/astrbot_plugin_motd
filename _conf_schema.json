@@ -5,6 +5,7 @@
   "api_url": {"description": "备用查询 API", "type": "string", "default": "https://api.mcsrvstat.us/2/{address}", "hint": "直连失败时使用，保留 {address} 占位符。响应应为 mcsrvstat.us 格式。"},
   "request_timeout": {"description": "备用 API 超时（秒）", "type": "float", "default": 10.0},
   "ping_timeout": {"description": "Minecraft 直连超时（秒）", "type": "float", "default": 4.0},
+  "query_players": {"description": "尝试通过 Query 获取完整玩家名单", "type": "bool", "default": true, "hint": "状态协议只公开部分玩家时，尝试 UDP Query（最多额外等待 1.5 秒）。服务器需 enable-query=true 且开放对应 UDP 端口；不可用时保留已公开样本。"},
   "history_enabled": {"description": "启用后台人数采样", "type": "bool", "default": true, "hint": "关闭时只记录手动查询；已有历史保留。修改后重载插件。"},
   "sample_interval": {"description": "后台采样间隔（秒）", "type": "int", "default": 300, "hint": "默认 5 分钟，最低 60 秒。绑定的服务器会持续采样，临时查询的服务器会跟踪 24 小时。"},
   "retention_hours": {"description": "历史保留时长（小时）", "type": "int", "default": 48, "hint": "最低 24 小时，图表固定显示最近 24 小时。"},

@@ -8,14 +8,14 @@ Minecraft Java 服务器状态查询插件，适用于 AstrBot 的 QQ 官方机�
 
 - `/motd`、`/mc`、`/mcstatus` 三个命令入口；群默认服务器查询与临时地址查询。
 - 本群群主、群管理员或机器人管理员均可设置/清除群默认服务器，支持 `set / 设置`、`unset / clear / 清除 / 取消`。设置成功后立即查询。
-- 查询在线/离线、版本、MOTD、在线/上限人数、人数进度条、公开玩家样本、服务器图标。没有图标时显示像素苦力怕。
+- 查询在线/离线、版本、MOTD、在线/上限人数、人数进度条、完整显示已公开玩家名单、服务器图标。没有图标时显示像素苦力怕。
 - Minecraft 状态握手和 ping/pong 测得的真实 RTT；保留域名 SRV 解析与显式端口。
 - 保留原像素风图片；图片渲染或上传失败时回复文字，包含人数历史摘要。
 - 原查询 API 地址、超时可配置；备用 API 返回的主机名、服务端软件和插件数量仍可显示。
 
 ## 新增 24 小时图表
 
-每张状态卡下方显示滚动 24 小时人数曲线，以及采样最低/最高/平均人数。`/motd history` 或 `/motd 波动` 可以直接请求带曲线的卡片，也可附带地址。
+每张状态卡下方显示平滑圆润的滚动 24 小时人数曲线，使用渐变填充和圆角描边。曲线经过真实采样点，不额外制造人数峰值，以及采样最低/最高/平均人数。`/motd history` 或 `/motd 波动` 可以直接请求带曲线的卡片，也可附带地址。
 
 默认每 300 秒采样，优先直连 Minecraft Java 状态协议，避免公开 API 缓存影响人数变化。直连失败时使用旧项目的 mcsrvstat.us API；图中会标注 API 样本可能有缓存。服务器不公开玩家名字时仍可记录总人数。直连成功时，软件、插件数量等额外信息仍从原 API 补充（缓存 1 小时），但不会覆盖直连的人数和 Ping；API 补充的玩家名单会注明缓存样本。
 
@@ -24,6 +24,14 @@ Minecraft Java 服务器状态查询插件，适用于 AstrBot 的 QQ 官方机�
 **首次使用不会补造过去的记录。** 首次只有一个点，持续运行后逐渐形成曲线；完整的 24 小时图需要运行采集 24 小时。停机、查询失败和离线均断开曲线，离线用红色标记、失败用黄色标记，在线 0 人会正常显示 0。时间以 UTC+8 显示。平均值是成功的人数采样平均值，不是按时间加权的全天均值。
 
 数据库在 AstrBot 的 `data/plugin_data/astrbot_plugin_motd/motd.db` 中，默认保留 48 小时，重载和重启后保留。后台只采集数据，用户发命令时才回复卡片。停用/卸载会取消后台任务。
+
+## MOTD 颜色与完整玩家名单
+
+保留 Java 状态响应的原始 MOTD，支持 Minecraft `§0`–`§f` 颜色、`§x§R§R§G§G§B§B` / `§#RRGGBB` 十六进制颜色，以及 JSON 文本组件的颜色、粗体、斜体、下划线和删除线。MOTD 按原始换行和卡片宽度自动排版。
+
+玩家名单使用独立的全宽区域，长名字自动换行，人数多时自动分页发送多张图片，不再用省略号裁剪或限制为两行。每页显示页码；只显示服务器实际返回的名字，不根据在线人数补造名单。
+
+默认开启 `query_players`：状态响应公开的名单不足时，额外尝试 Minecraft UDP Query（最多等待 1.5 秒）。服务器管理员可以在 `server.properties` 中设置 `enable-query=true`，将 `query.port` 设置为游戏端口，并放行对应 UDP 端口，提供更完整的名单；不开启或查询失败仍正常显示状态协议已公开的名字。完整的实时名单优先于 API 缓存，补充使用 API 名单时明确标注缓存来源。参见 [mcstatus 查询说明](https://mcstatus.readthedocs.io/en/stable/api/basic/)。
 
 ## 安装
 
@@ -88,7 +96,7 @@ OneBot 支持读取群消息角色及查询成员信息。QQ 官方（WebSocket 
 
 ## 配置
 
-在 WebUI 插件配置中调整：`bot_name`、`admin_ids`、`group_admin_ids`、`api_url`、`request_timeout`、`ping_timeout`、`history_enabled`、`sample_interval`、`retention_hours`、`monitor_servers`、`font_path`。后台采样参数修改后重载插件。
+在 WebUI 插件配置中调整：`bot_name`、`admin_ids`、`group_admin_ids`、`api_url`、`request_timeout`、`ping_timeout`、`query_players`、`history_enabled`、`sample_interval`、`retention_hours`、`monitor_servers`、`font_path`。后台采样参数修改后重载插件。
 
 ## 本地验证与打包
 

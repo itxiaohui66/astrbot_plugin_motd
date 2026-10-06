@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
 from services.mc_api import MinecraftServerAPI
 
@@ -35,7 +36,7 @@ async def test_real_java_status_protocol_on_local_server():
                         "max": 50,
                         "sample": [{"name": "Alex", "id": "00000000-0000-0000-0000-000000000000"}],
                     },
-                    "description": {"text": "Hello server"},
+                    "description": {"text": "Hello server", "color": "gold"},
                 }
             ).encode()
             packet = b"\x00" + api._encode_varint(len(payload)) + payload
@@ -58,6 +59,7 @@ async def test_real_java_status_protocol_on_local_server():
         assert result["players_online"] == 2 and result["players_max"] == 50
         assert result["player_list"] == ["Alex"] and result["version"] == "1.21.1"
         assert result["motd"] == "Hello server" and result["latency_ms"] >= 0
+        assert result["motd_raw"] == {"text": "Hello server", "color": "gold"}
         # Exercise the migrated fallback ping/pong path too.
         latency = await api._measure_minecraft_latency("127.0.0.1", port, "127.0.0.1", 767)
         assert latency is not None and latency >= 0
@@ -82,7 +84,7 @@ async def test_api_fallback_and_player_normalization(monkeypatch):
                 "online": True,
                 "version": "Paper 1.21",
                 "port": 25565,
-                "motd": {"clean": ["First", "Second"]},
+                "motd": {"clean": ["First", "Second"], "raw": ["§cFirst", "§bSecond"]},
                 "players": {
                     "online": 5,
                     "max": 20,
@@ -100,6 +102,7 @@ async def test_api_fallback_and_player_normalization(monkeypatch):
     api = MinecraftServerAPI({})
     data = await api.query("mc.example.com")
     assert data["source"] == "api" and data["motd"] == "First | Second"
+    assert data["motd_raw"] == "§cFirst\n§bSecond"
     assert data["player_list"] == ["Steve", "Alex", "Third"]
     assert seen == ["https://api.mcsrvstat.us/2/mc.example.com"]  # no forced :25565
     text = api.format_server_info(data)
@@ -155,3 +158,54 @@ async def test_srv_lookup_input_is_not_changed(monkeypatch):
     api._query_api = no_extra
     data = await api.query("mc.example.com")
     assert seen == ["mc.example.com"] and data["port"] == 25570
+
+
+@pytest.mark.parametrize("mode", ["query", "error", "disabled", "complete"])
+async def test_query_full_names_and_cache_never_replace_realtime_list(monkeypatch, mode):
+    calls = []
+    direct_names = ["Alex", "Steve", "Third"] if mode == "complete" else ["Alex"]
+
+    async def status(**kwargs):
+        return SimpleNamespace(
+            raw={"players": {"sample": [{"name": name} for name in direct_names]}},
+            version=SimpleNamespace(name="1.21"),
+            motd=SimpleNamespace(to_plain=lambda: "Hello"),
+            players=SimpleNamespace(online=3, max=20),
+            latency=5,
+        )
+
+    async def query(**kwargs):
+        calls.append("query")
+        if mode == "error":
+            raise OSError("UDP disabled")
+        return SimpleNamespace(players=SimpleNamespace(names=["Alex", "Steve", "Third"]))
+
+    async def lookup(*args, **kwargs):
+        return SimpleNamespace(
+            address=SimpleNamespace(host="test.example", port=25565),
+            async_status=status,
+            async_query=query,
+        )
+
+    monkeypatch.setattr("services.mc_api.JavaServer.async_lookup", lookup)
+    api = MinecraftServerAPI({"query_players": mode != "disabled"})
+
+    async def cached(*args, **kwargs):
+        return {
+            "online": True,
+            "player_list": ["Old1", "Old2", "Old3", "Old4"],
+            "players_online": 99,
+            "latency_ms": 999,
+        }
+
+    api._query_api = cached
+    data = await api.query("test.example")
+    assert data["players_online"] == 3 and data["latency_ms"] == 5
+    assert data["source"] == "direct"
+    assert calls == (["query"] if mode in ("query", "error") else [])
+    if mode in ("query", "complete"):
+        assert data["player_list"] == ["Alex", "Steve", "Third"]
+        assert not data.get("player_list_cached")
+    else:
+        assert data["player_list"] == ["Old1", "Old2", "Old3", "Old4"]
+        assert data["player_list_cached"]

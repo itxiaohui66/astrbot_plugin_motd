@@ -13,7 +13,7 @@ from astrbot.api.star import Context, Star, StarTools
 from .services.address import normalize_address
 from .services.mc_api import MinecraftServerAPI
 from .services.monitor import PlayerMonitor
-from .services.motd_card import render_motd_card
+from .services.motd_card import render_motd_cards
 from .services.permissions import get_group_role
 from .services.storage import MotdStore
 
@@ -178,8 +178,8 @@ class MotdPlugin(Star):
             data = {"address": address, "online": False, "query_failed": True}
         path = self.data_dir / f"card-{uuid.uuid4().hex}.png"
         try:
-            image_bytes = await asyncio.to_thread(
-                render_motd_card,
+            cards = await asyncio.to_thread(
+                render_motd_cards,
                 data,
                 str(self.config.get("bot_name", "xiaohuicat")),
                 history,
@@ -188,9 +188,10 @@ class MotdPlugin(Star):
                 self.monitor.enabled,
                 str(self.config.get("font_path", "")),
             )
-            await asyncio.to_thread(path.write_bytes, image_bytes)
-            # Await the adapter send so upload errors can use the original text fallback.
-            await event.send(event.image_result(str(path.resolve())))
+            for image_bytes in cards:
+                await asyncio.to_thread(path.write_bytes, image_bytes)
+                # Finish each upload before replacing the local file with the next page.
+                await event.send(event.image_result(str(path.resolve())))
         except Exception:
             logger.exception("MOTD 图片生成或发送失败: %s", address)
             text = self.api.format_server_info(None if data.get("query_failed") else data)

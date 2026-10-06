@@ -222,3 +222,31 @@ async def test_group_grant_is_limited_to_one_group_and_adapter(plugin_class):
     assert "qq-main|group-openid|user-openid" in event.messages[-1][1]
     assert not plugin._is_admin(event)
     await plugin.terminate()
+
+
+async def test_paged_images_uploaded_before_replacing_file_and_cleaned(
+    plugin_class, monkeypatch, tmp_path
+):
+    plugin = plugin_class(object(), {"history_enabled": False})
+    pages = [b"page-one", b"page-two", b"page-three"]
+    monkeypatch.setattr(
+        sys.modules[plugin_class.__module__], "render_motd_cards", lambda *args: pages
+    )
+
+    async def query(address):
+        return {"online": True, "address": address, "players_online": 100, "players_max": 200}
+
+    plugin.api.query = query
+    uploaded = []
+
+    class UploadEvent(Event):
+        async def send(self, result):
+            if result[0] == "image":
+                uploaded.append(Path(result[1]).read_bytes())
+            await super().send(result)
+
+    event = UploadEvent()
+    await plugin.motd(event, "mc.example.com")
+    assert uploaded == pages
+    assert not list(tmp_path.glob("card-*.png"))
+    await plugin.terminate()

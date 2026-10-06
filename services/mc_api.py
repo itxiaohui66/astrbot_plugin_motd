@@ -22,6 +22,7 @@ class MinecraftServerAPI:
         self.timeout: float = mc_cfg.get("request_timeout", 10)
         self.ping_timeout: float = mc_cfg.get("ping_timeout", 4)
         self.default_port: int = mc_cfg.get("default_port", 25565)
+        self.query_players = bool(mc_cfg.get("query_players", True))
         self._metadata = OrderedDict()
 
     async def query(self, address: str) -> dict | None:
@@ -40,6 +41,7 @@ class MinecraftServerAPI:
                 "port": server.address.port,
                 "version": status.version.name,
                 "motd": status.motd.to_plain(),
+                "motd_raw": raw.get("description", status.motd.to_plain()),
                 "players_online": status.players.online,
                 "players_max": status.players.max,
                 "player_list": [
@@ -50,16 +52,25 @@ class MinecraftServerAPI:
                 "plugins": raw.get("plugins", {}),
                 "icon": raw.get("favicon", ""),
                 "source": "direct",
-            }
+            }, server
 
         try:
-            data = await asyncio.wait_for(direct(), timeout=self.ping_timeout + 2)
+            data, server = await asyncio.wait_for(direct(), timeout=self.ping_timeout + 2)
         except Exception as exc:
             logger.debug("MC 直连失败，使用原公开 API %s: %s", address, exc)
             data = await self._query_api(address)
             if data is not None:
                 data["source"] = "api"
             return data
+        if self.query_players and len(data["player_list"]) < data["players_online"]:
+            try:
+                query = await asyncio.wait_for(server.async_query(tries=1), timeout=1.5)
+                names = [str(name).strip() for name in query.players.names if str(name).strip()]
+                if len(names) > len(data["player_list"]):
+                    data["player_list"] = names
+                    data["player_list_source"] = "query"
+            except Exception as exc:
+                logger.debug("MC Query 名单不可用，保留状态样本 %s: %s", address, exc)
         # Java status does not normally expose software/plugin names. Preserve the
         # old API's extra fields while NEVER replacing direct player counts or RTT.
         cached = self._metadata.get(address)
@@ -72,11 +83,17 @@ class MinecraftServerAPI:
         else:
             extra = cached[1]
         if extra and extra.get("online"):
-            for key in ("hostname", "software", "plugins", "icon", "player_list"):
+            for key in ("hostname", "software", "plugins", "icon"):
                 if not data.get(key) and extra.get(key):
                     data[key] = extra[key]
-                    if key == "player_list":
-                        data["player_list_cached"] = True
+            extra_names = extra.get("player_list") or []
+            if (
+                data.get("player_list_source") != "query"
+                and len(data["player_list"]) < data["players_online"]
+                and len(extra_names) > len(data["player_list"])
+            ):
+                data["player_list"] = extra_names
+                data["player_list_cached"] = True
         return data
 
     @staticmethod
@@ -175,7 +192,12 @@ class MinecraftServerAPI:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url)
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": "xiaohuicat-AstrBot-MOTD/1.0.2 (+https://github.com/itxiaohui66/astrbot_plugin_motd)"
+                    },
+                )
 
                 if response.status_code != 200:
                     logger.warning(f"MC服务器查询失败: {address} HTTP {response.status_code}")
@@ -190,13 +212,21 @@ class MinecraftServerAPI:
                         "latency_ms": None,
                     }
 
-                # 提取 MOTD 纯文本
+                # Keep the raw color codes alongside the original plain fallback.
                 motd_text = ""
+                motd_raw = ""
                 motd = data.get("motd", {})
                 if isinstance(motd, dict):
                     motd_text = " | ".join(motd.get("clean", []))
+                    raw_lines = motd.get("raw")
+                    motd_raw = (
+                        "\n".join(raw_lines)
+                        if isinstance(raw_lines, list)
+                        else (raw_lines or motd_text)
+                    )
                 elif isinstance(motd, str):
                     motd_text = motd
+                    motd_raw = motd
 
                 players = data.get("players", {})
                 player_list = []
@@ -225,6 +255,7 @@ class MinecraftServerAPI:
                     "port": resolved_port,
                     "version": data.get("version", "未知"),
                     "motd": motd_text,
+                    "motd_raw": motd_raw,
                     "players_online": players.get("online", 0),
                     "players_max": players.get("max", 0),
                     "player_list": player_list,
@@ -298,8 +329,7 @@ class MinecraftServerAPI:
         player_list = data.get("player_list") or []
         if player_list:
             lines.append(
-                f"👤 已公开玩家（{len(player_list)}/{players_online}）: "
-                + "、".join(player_list)[:400]
+                f"👤 已公开玩家（{len(player_list)}/{players_online}）: " + "、".join(player_list)
             )
         elif players_online:
             lines.append("👤 服务器未公开玩家名单")
